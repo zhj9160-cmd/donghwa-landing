@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<!--
+  웹슬라이드 스타터 · 두온교육 「강의 사이트 제작 노하우」 참가자 키트
+  먼저 바꿀 것
+  1) 아래 스크립트의 LS = 'mykit_' → 내 강의 고유 접두사 (예: 'ai0927_')
+     접두사가 겹치면 다른 강의 사이트와 저장값이 섞임
+  2) <title>, description, 표지·마침 슬라이드의 [ ] 자리
+  3) 슬라이드 추가·삭제 시 aria-label 번호와 주석 번호 함께 재정렬 (AGENTS.md 참고)
+  외부 파일 없음 · 백엔드 없음 · 이 파일 하나로 동작
+-->
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>[강의 제목] 슬라이드</title>
+<meta name="description" content="[강의 제목] 수업 슬라이드 · [날짜] · 강사 [이름]">
+<meta name="theme-color" content="#F8D65C">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎓</text></svg>">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root{
+  --ink:#273129; --sub:#566158; --mute:#68736A;
+  --line:#ECE7CE;
+  --slide-bg:#FFFFFF; --card:#FFFFFF;
+  --accent:#F8D65C; --accent-sub:#394735;
+  --shadow:0 .45cqi 1.4cqi rgba(0,0,0,.09), 0 .1cqi .3cqi rgba(0,0,0,.07);
+  --shadow-lg:0 .8cqi 2.4cqi rgba(0,0,0,.13), 0 .18cqi .45cqi rgba(0,0,0,.08);
+  --alert:#D32F2F;
+  --nav-h:60px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:#FFF8DE;color:var(--ink);
+  font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;
+  word-break:keep-all;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:inherit;text-wrap:balance;letter-spacing:-.01em}
+p,li{text-wrap:pretty}
+button{font-family:inherit}
+
+/* 16:9 무대 · 모든 크기를 무대 폭 기준 cqi로 → 창 크기와 무관하게 같은 비율 */
+#stage{position:fixed;left:50%;top:calc((100vh - var(--nav-h)) / 2);transform:translate(-50%,-50%);
+  width:min(100vw, calc((100vh - var(--nav-h)) * 16 / 9));aspect-ratio:16/9;
+  container-type:inline-size;background:var(--slide-bg);overflow:hidden}
+
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:4.6cqi 6cqi;background:var(--slide-bg);color:var(--ink)}
+.slide.active{display:flex}
+.slide-content{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.8cqi;min-height:0}
+
+/* 타이포 (단위 cqi) */
+.kicker{display:flex;align-items:center;gap:1cqi;font-size:1.6cqi;font-weight:800;letter-spacing:.06em;color:var(--ink)}
+.kicker::before{content:'';flex:0 0 auto;width:2.4cqi;height:.36cqi;background:currentColor}
+h1{font-size:6cqi;font-weight:900;line-height:1.22}
+h2{font-size:3.9cqi;font-weight:800;line-height:1.28}
+.lede{font-size:2.2cqi;color:var(--sub);line-height:1.6}
+
+/* 표지·마침: 따뜻한 노랑 / 휴식: 연노랑 */
+.title-slide{background:var(--accent);color:var(--ink)}
+.title-slide .slide-content{align-items:center;text-align:center}
+.title-slide .kicker{color:#236340}
+.title-slide h1::after{content:'';display:block;width:6cqi;height:.4cqi;background:#236340;margin:2.4cqi auto 0}
+.title-slide .lede{color:var(--accent-sub)}
+.slide.dark{background:#FFF3BE;color:var(--ink)}
+.slide.dark .kicker{color:#236340}
+.slide.dark .lede{color:var(--sub)}
+.meta-row{display:flex;justify-content:center;gap:1.2cqi;flex-wrap:wrap;font-size:1.7cqi}
+.meta-row span{border:.18cqi solid var(--ink);border-radius:99cqi;padding:.7cqi 2cqi;color:var(--ink);font-weight:600}
+
+/* 불릿: 한 줄씩 그림자 박스 */
+.bullets{display:flex;flex-direction:column;gap:1.2cqi}
+.bullets li{list-style:none;display:flex;gap:1.4cqi;align-items:flex-start;font-size:2.25cqi;line-height:1.55;
+  background:var(--card);box-shadow:var(--shadow);border-radius:1cqi;padding:1.25cqi 2cqi}
+.bullets li::before{content:'';flex:0 0 auto;width:.75cqi;height:.75cqi;background:#236340;margin-top:1.36cqi}
+.slide-content a{color:inherit;text-underline-offset:.3em;text-decoration-thickness:.15em}
+
+/* 카드 */
+.card-grid{display:grid;gap:1.8cqi}
+.c2{grid-template-columns:repeat(2,1fr)}
+.c3{grid-template-columns:repeat(3,1fr)}
+.c4{grid-template-columns:repeat(4,1fr)}
+.card{background:var(--card);border-radius:1.2cqi;box-shadow:var(--shadow-lg);padding:2.2cqi;
+  display:flex;flex-direction:column;gap:.8cqi;min-width:0}
+.card .n{font-size:3.4cqi;font-weight:900;line-height:1;color:#236340}
+.card .t{font-size:2.3cqi;font-weight:800}
+.card .d{font-size:1.8cqi;color:var(--sub);line-height:1.5}
+/* 색으로만 구분 금지: 아쉬운 예 = 점선 + ✕, 좋은 예 = 굵은 초록 막대 + ✓ */
+.card.bad{background:#FAFAF6;box-shadow:none;border:.2cqi dashed #ADB5A8}
+.card.bad .t{color:var(--sub)}
+.card.bad .t::before{content:'✕  '}
+.card.good{border-left:.7cqi solid #236340}
+.card.good .t::before{content:'✓  '}
+
+/* 표 */
+table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:1.85cqi;line-height:1.35;
+  background:var(--card);box-shadow:var(--shadow-lg);border-radius:1.2cqi;overflow:hidden}
+table.tbl th, table.tbl td{padding:.8cqi 1.6cqi;text-align:left;border-bottom:.12cqi solid var(--line)}
+table.tbl tbody tr:last-child td{border-bottom:none}
+table.tbl th{background:#F8D65C;color:var(--ink);font-weight:800}
+table.tbl tr.today td{font-weight:800}
+table.tbl tr.today td:first-child{box-shadow:inset .55cqi 0 0 #236340}
+table.tbl td:first-child, table.tbl th:first-child{white-space:nowrap}
+table.tbl td:first-child{color:var(--sub)}
+
+/* 프롬프트 카드: 연노랑 박스 + 오른쪽 위 초록 복사 버튼 */
+.prompt-card{position:relative;background:#FFF3BE;color:var(--ink);border-radius:1.2cqi;box-shadow:var(--shadow-lg);
+  padding:2cqi 2.4cqi;display:flex;flex-direction:column;gap:1cqi}
+.prompt-card .label{font-size:1.5cqi;font-weight:800;letter-spacing:.06em;color:#236340;padding-right:14cqi}
+.prompt-card blockquote{font-size:2cqi;line-height:1.6;color:var(--ink);border-left:.3cqi solid #236340;padding-left:1.6cqi;
+  font-style:normal;white-space:pre-wrap}
+.copy-btn{position:absolute;top:1.5cqi;right:1.6cqi;font-size:1.5cqi;font-weight:800;
+  padding:.7cqi 1.8cqi;border-radius:99cqi;border:none;background:#236340;color:#FFFFFF;cursor:pointer;min-height:44px;min-width:44px}
+.copy-btn:hover, .copy-btn.copied{background:#327D50}
+.copy-btn:focus-visible{outline:.25cqi solid #236340;outline-offset:.25cqi}
+
+/* 타이머: 클릭 시작/일시정지 · 더블클릭 또는 R 키 리셋 */
+.timer-chip{display:inline-flex;align-items:center;gap:1cqi;align-self:flex-start;cursor:pointer;user-select:none;
+  background:var(--card);box-shadow:var(--shadow);border:.18cqi solid var(--ink);border-radius:99cqi;min-height:44px;
+  padding:.9cqi 2.2cqi;font-size:2cqi;font-weight:800;color:var(--ink)}
+.timer-chip .time{font-variant-numeric:tabular-nums;min-width:3.4em;text-align:center}
+.timer-chip.running{background:#236340;color:#FFFFFF}
+.timer-chip.warn .time{color:var(--alert)}
+.timer-chip.running.warn .time{color:#FF8A80}
+.timer-chip .state{font-size:1.4cqi;font-weight:700;opacity:.8}
+.timer-chip:focus-visible, .break-big:focus-visible{outline:.3cqi solid currentColor;outline-offset:.4cqi}
+.break-big{cursor:pointer;user-select:none;text-align:center;font-variant-numeric:tabular-nums;background:none;border:none;
+  font-size:16cqi;font-weight:900;line-height:1.05;color:#236340;min-height:44px;border-radius:1cqi}
+.break-big.warn{color:#FF8A80}
+
+/* 하단 네비 */
+#nav{position:fixed;left:0;right:0;bottom:0;height:var(--nav-h);background:#FFFFFF;border-top:1px solid #ECE7CE;
+  display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--ink);font-size:14px;z-index:200}
+#nav button, #nav a{background:#FFF3BE;color:var(--ink);border:1px solid #E8D78B;border-radius:8px;
+  height:44px;min-width:44px;padding:0 14px;font-size:14px;font-weight:700;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#nav button:hover, #nav a:hover{background:#F8D65C}
+#nav button:disabled{opacity:.35;cursor:default}
+#nav button:focus-visible, #nav a:focus-visible{outline:2px solid #236340;outline-offset:2px}
+#nav .grow{flex:1}
+#counter{font-variant-numeric:tabular-nums;font-weight:800;min-width:5.5em;text-align:center}
+.hint{color:#68736A;font-size:12.5px}
+#progress{position:fixed;left:0;bottom:var(--nav-h);height:3px;background:#236340;width:0;z-index:201;transition:width .2s}
+@media (max-width:760px){ #nav .hide-sm{display:none} }
+
+/* 전체보기: 실제 축소판 */
+.grid-overlay{position:fixed;inset:0;z-index:500;background:rgba(255,248,222,.98);display:none;overflow:auto;padding:22px 22px 40px}
+.grid-overlay.open{display:block}
+.grid-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.grid-head h2{color:var(--ink);font-size:20px;font-weight:800}
+.grid-head button{background:#236340;color:#FFFFFF;border:1px solid #236340;border-radius:8px;height:44px;padding:0 16px;
+  font-size:14px;font-weight:700;cursor:pointer}
+.grid-head button:focus-visible{outline:2px solid #236340;outline-offset:2px}
+.grid-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.mini{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;cursor:pointer;
+  outline:3px solid transparent;outline-offset:2px;background:var(--slide-bg)}
+.mini:hover, .mini:focus-visible, .mini.current{outline-color:#236340}
+/* 960px 기준으로 그린 뒤 축소 · 240px에 직접 그리면 브라우저 최소 글꼴 크기에 걸려 넘침 */
+.mini-inner{position:absolute;left:0;top:0;width:960px;height:540px;container-type:inline-size;
+  transform-origin:0 0;pointer-events:none;background:var(--slide-bg)}
+.mini-inner .slide{display:flex}
+.mini-num{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.78);color:#FFFFFF;font-size:12px;font-weight:700;
+  padding:2px 8px;border-radius:99px;z-index:2}
+
+@media (prefers-reduced-motion:reduce){ #progress{transition:none} }
+
+/* PDF: 16:9 페이지 1장 = 슬라이드 1장 */
+@page{size:13.333in 7.5in;margin:0}
+@media print{
+  html, body{overflow:visible!important;height:auto!important;background:#FFFFFF}
+  #nav, #progress, .grid-overlay{display:none!important}
+  #stage{position:static!important;transform:none!important;width:13.333in!important;aspect-ratio:auto!important;overflow:visible!important}
+  #stage > .slide{position:relative!important;display:flex!important;width:13.333in;height:7.5in;
+    break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #stage > .slide:last-child{break-after:auto;page-break-after:auto}
+}
+</style>
+</head>
+<body>
+
+<main id="stage">
+
+<!-- ===== 1. 표지 ===== -->
+<section class="slide active title-slide" aria-label="1. 표지">
+  <div class="slide-content"><div class="kicker">강사를 위한 동화쓰기 · 100분</div><h1>강사를 위한 동화쓰기</h1><p class="lede">100분 · 이야기 설계와 장면 집필</p><div class="meta-row"><span>소재</span><span>구조</span><span>초안</span></div></div>
+</section>
+
+<!-- ===== 2. 순서 ===== -->
+<section class="slide" aria-label="2. 순서">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>강의 흐름</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>0~20분</td><td>동화와 소재</td></tr><tr><td>20~50분</td><td>인물과 구조 · 실습 ①</td></tr><tr><td>50~60분</td><td>휴식</td></tr><tr><td>60~90분</td><td>장면 집필 · 실습 ②·③</td></tr><tr><td>90~100분</td><td>피드백과 현장 적용</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 3. 학습 목표 ===== -->
+<section class="slide" aria-label="3. 학습 목표">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>오늘의 결과물</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">이해</div><div class="d">어린이 독자의 눈높이</div></div><div class="card"><div class="n">2</div><div class="t">집필</div><div class="d">동화 핵심 장면 초안</div></div><div class="card"><div class="n">3</div><div class="t">적용</div><div class="d">강의 활동 1개 설계</div></div></div></div>
+</section>
+
+<!-- ===== 4. 동화의 특징 ===== -->
+<section class="slide" aria-label="4. 동화의 특징">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>동화의 특징</h2><ul class="bullets"><li>어린이의 시선: 낯익은 세계에서 새로움 발견</li><li>선명한 사건: 인물의 선택과 결과</li><li>여운 있는 결말: 설명보다 변화</li></ul></div>
+</section>
+
+<!-- ===== 5. 독자 관점 ===== -->
+<section class="slide" aria-label="5. 독자 관점">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>어린이의 눈높이</h2><div class="card-grid c2"><div class="card bad"><div class="t">어른의 설명</div><div class="d">교훈과 정보를 먼저 전달</div></div><div class="card good"><div class="t">어린이의 경험</div><div class="d">장면과 행동에서 의미 발견</div></div></div></div>
+</section>
+
+<!-- ===== 6. 이야기 씨앗 ===== -->
+<section class="slide" aria-label="6. 이야기 씨앗">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>소재의 출발점</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">일상</div><div class="d">사라진 물건과 낯선 소리</div></div><div class="card"><div class="n">2</div><div class="t">질문</div><div class="d">만약 그림자가 말을 한다면</div></div><div class="card"><div class="n">3</div><div class="t">기억</div><div class="d">어릴 적 기다림과 두려움</div></div></div></div>
+</section>
+
+<!-- ===== 7. 소재 선정 ===== -->
+<section class="slide" aria-label="7. 소재 선정">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>소재 선정의 기준</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>경험</td><td>직접 보거나 느낀 장면</td></tr><tr><td>질문</td><td>뒤가 궁금한 상황</td></tr><tr><td>상상</td><td>현실을 비트는 한 가지 변화</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 8. 중심 질문 ===== -->
+<section class="slide" aria-label="8. 중심 질문">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>이야기를 이끄는 질문</h2><div class="prompt-card"><div class="label">중심 질문 · 활동 문장</div><blockquote id="pt-8">주인공은 무엇을 원하나? 그 목표를 가로막는 것은 무엇인가? 마지막에 어떤 선택을 하나?</blockquote><button type="button" class="copy-btn" data-copy-target="pt-8" aria-label="중심 질문 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 9. 주인공 ===== -->
+<section class="slide" aria-label="9. 주인공">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>주인공의 세 요소</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">욕구</div><div class="d">가장 갖고 싶은 것</div></div><div class="card"><div class="n">2</div><div class="t">약점</div><div class="d">쉽게 넘지 못하는 마음</div></div><div class="card"><div class="n">3</div><div class="t">행동</div><div class="d">스스로 문제에 맞서는 방식</div></div></div></div>
+</section>
+
+<!-- ===== 10. 목표 ===== -->
+<section class="slide" aria-label="10. 목표">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>선명한 목표</h2><ul class="bullets"><li>보이는 목표: 찾기·지키기·전하기</li><li>마음의 목표: 인정받기·화해하기</li><li>확인 기준: 성공과 실패가 구별되는 상태</li></ul></div>
+</section>
+
+<!-- ===== 11. 장애물 ===== -->
+<section class="slide" aria-label="11. 장애물">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>장애물의 힘</h2><div class="card-grid c2"><div class="card bad"><div class="t">약한 장애물</div><div class="d">한 번에 해결되는 작은 불편</div></div><div class="card good"><div class="t">강한 장애물</div><div class="d">주인공의 선택을 바꾸는 문제</div></div></div></div>
+</section>
+
+<!-- ===== 12. 변화 ===== -->
+<section class="slide" aria-label="12. 변화">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>주인공의 변화</h2><div class="card-grid c2"><div class="card bad"><div class="t">이야기 전</div><div class="d">혼자서는 못 한다는 믿음</div></div><div class="card good"><div class="t">이야기 뒤</div><div class="d">도움을 청할 수 있다는 깨달음</div></div></div></div>
+</section>
+
+<!-- ===== 13. 배경 ===== -->
+<section class="slide" aria-label="13. 배경">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>배경의 역할</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">장소</div><div class="d">사건이 벌어질 수 있는 공간</div></div><div class="card"><div class="n">2</div><div class="t">시간</div><div class="d">선택을 재촉하는 기한</div></div><div class="card"><div class="n">3</div><div class="t">분위기</div><div class="d">감각으로 느끼는 이야기의 결</div></div></div></div>
+</section>
+
+<!-- ===== 14. 사건 구조 ===== -->
+<section class="slide" aria-label="14. 사건 구조">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>네 장면 구조</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>시작</td><td>주인공과 목표 등장</td></tr><tr><td>전개</td><td>장애물과 첫 시도</td></tr><tr><td>절정</td><td>가장 어려운 선택</td></tr><tr><td>결말</td><td>선택의 결과와 변화</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 15. 시작 장면 ===== -->
+<section class="slide" aria-label="15. 시작 장면">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>첫 장면의 초점</h2><div class="card-grid c2"><div class="card bad"><div class="t">설명형</div><div class="d">옛날 어느 마을에 착한 아이가 살았다</div></div><div class="card good"><div class="t">장면형</div><div class="d">아침마다 사라지는 신발 한 짝</div></div></div></div>
+</section>
+
+<!-- ===== 16. 실습 ① ===== -->
+<section class="slide" aria-label="16. 실습 ①">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>소재와 질문</h2><div class="prompt-card"><div class="label">실습 ① · 활동 문장</div><blockquote id="pt-16">최근 기억나는 어린이의 말·행동 하나를 적기. 그 장면에서 생기는 “만약?” 질문 한 개 만들기.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-16" aria-label="실습 ① 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 17. 실습 공유 ===== -->
+<section class="slide" aria-label="17. 실습 공유">
+  <div class="slide-content"><div class="kicker">1부 · 이야기 설계</div><h2>짝 공유</h2><div class="prompt-card"><div class="label">실습 공유 · 활동 문장</div><blockquote id="pt-17">짝에게 소재와 중심 질문을 30초씩 소개하기. 듣는 사람은 가장 궁금한 점 한 가지 말하기.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-17" aria-label="실습 공유 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 18. 휴식 ===== -->
+<section class="slide dark" aria-label="18. 휴식">
+  <div class="slide-content" style="align-items:center;text-align:center"><div class="kicker">휴식</div><button type="button" class="break-big" data-minutes="10" title="클릭: 시작·일시정지 · 더블클릭 또는 R: 리셋" aria-label="휴식 타이머 10분"><span class="time">10:00</span></button><p class="lede">60분부터 장면 집필 시작</p></div>
+</section>
+
+<!-- ===== 19. 갈등 ===== -->
+<section class="slide" aria-label="19. 갈등">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>갈등의 종류</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">바깥 문제</div><div class="d">사람·규칙·환경의 방해</div></div><div class="card"><div class="n">2</div><div class="t">마음 문제</div><div class="d">두려움·망설임·오해</div></div><div class="card"><div class="n">3</div><div class="t">선택</div><div class="d">둘 중 하나를 포기해야 하는 순간</div></div></div></div>
+</section>
+
+<!-- ===== 20. 사건 연결 ===== -->
+<section class="slide" aria-label="20. 사건 연결">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>원인과 결과</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>목표</td><td>잃어버린 종 찾기</td></tr><tr><td>첫 시도</td><td>친구에게 묻기</td></tr><tr><td>새 문제</td><td>친구도 같은 소리를 들음</td></tr><tr><td>다음 행동</td><td>소리가 나는 곳 추적</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 21. 장면 구성 ===== -->
+<section class="slide" aria-label="21. 장면 구성">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>장면의 세 재료</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">행동</div><div class="d">주인공이 실제로 하는 일</div></div><div class="card"><div class="n">2</div><div class="t">대화</div><div class="d">상대와 부딪히는 말</div></div><div class="card"><div class="n">3</div><div class="t">감각</div><div class="d">소리·냄새·촉감의 단서</div></div></div></div>
+</section>
+
+<!-- ===== 22. 묘사 ===== -->
+<section class="slide" aria-label="22. 묘사">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>행동으로 드러내기</h2><div class="card-grid c2"><div class="card bad"><div class="t">설명</div><div class="d">민지는 무서웠다</div></div><div class="card good"><div class="t">장면</div><div class="d">민지는 손잡이를 잡은 채 세 번 숨을 골랐다</div></div></div></div>
+</section>
+
+<!-- ===== 23. 대화 ===== -->
+<section class="slide" aria-label="23. 대화">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>인물다운 말</h2><div class="card-grid c2"><div class="card bad"><div class="t">평면적 대화</div><div class="d">“나는 두려워.”</div></div><div class="card good"><div class="t">성격이 보이는 대화</div><div class="d">“네가 먼저 문 열어. 난 뒤를 볼게.”</div></div></div></div>
+</section>
+
+<!-- ===== 24. 문장 리듬 ===== -->
+<section class="slide" aria-label="24. 문장 리듬">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>낭독에 맞는 문장</h2><ul class="bullets"><li>한 문장 한 동작: 듣는 흐름 유지</li><li>긴 문장과 짧은 문장: 속도 조절</li><li>소리 내어 읽기: 걸리는 표현 찾기</li></ul></div>
+</section>
+
+<!-- ===== 25. 반복과 변주 ===== -->
+<section class="slide" aria-label="25. 반복과 변주">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>기대와 변화</h2><div class="card-grid c3"><div class="card"><div class="n">1</div><div class="t">반복</div><div class="d">익숙한 말과 행동 재등장</div></div><div class="card"><div class="n">2</div><div class="t">예상</div><div class="d">독자가 다음 장면 추측</div></div><div class="card"><div class="n">3</div><div class="t">변주</div><div class="d">세 번째에 뜻밖의 선택</div></div></div></div>
+</section>
+
+<!-- ===== 26. 결말 ===== -->
+<section class="slide" aria-label="26. 결말">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>변화가 남는 결말</h2><div class="card-grid c2"><div class="card bad"><div class="t">설명형</div><div class="d">그래서 친구를 도와야 한다는 교훈</div></div><div class="card good"><div class="t">장면형</div><div class="d">이번에는 민지가 먼저 손을 내밀었다</div></div></div></div>
+</section>
+
+<!-- ===== 27. 실습 ② ===== -->
+<section class="slide" aria-label="27. 실습 ②">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>네 장면 줄거리</h2><div class="prompt-card"><div class="label">실습 ② · 활동 문장</div><blockquote id="pt-27">시작: 주인공과 목표. 전개: 첫 시도와 방해. 절정: 가장 어려운 선택. 결말: 행동으로 보이는 변화.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-27" aria-label="실습 ② 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 28. 실습 ③ ===== -->
+<section class="slide" aria-label="28. 실습 ③">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>핵심 장면 집필</h2><div class="prompt-card"><div class="label">실습 ③ · 활동 문장</div><blockquote id="pt-28">네 장면 중 선택이 일어나는 한 장면 쓰기. 행동 1개·대화 1줄·감각 1개 포함.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-28" aria-label="실습 ③ 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 29. 낭독 ===== -->
+<section class="slide" aria-label="29. 낭독">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>소리 내어 읽기</h2><div class="prompt-card"><div class="label">낭독 · 활동 문장</div><blockquote id="pt-29">쓴 장면을 짝에게 1분 낭독. 듣는 사람은 머릿속에 남은 장면 한 가지 말하기.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-29" aria-label="낭독 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 30. 피드백 기준 ===== -->
+<section class="slide" aria-label="30. 피드백 기준">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>초안 점검</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>인물</td><td>원하는 것이 보이는가</td></tr><tr><td>갈등</td><td>선택이 필요한가</td></tr><tr><td>장면</td><td>행동과 대화가 있는가</td></tr><tr><td>문장</td><td>소리 내어 읽기 편한가</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 31. 수정 순서 ===== -->
+<section class="slide" aria-label="31. 수정 순서">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>수정의 우선순위</h2><ul class="bullets"><li>구조: 빠진 사건과 약한 선택 점검</li><li>장면: 설명을 행동과 대화로 전환</li><li>문장: 낭독하며 군더더기 덜기</li></ul></div>
+</section>
+
+<!-- ===== 32. 수업 활동 ===== -->
+<section class="slide" aria-label="32. 수업 활동">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>학습자별 활동</h2><table class="tbl"><thead><tr><th scope="col">구분</th><th scope="col">핵심 내용</th></tr></thead><tbody><tr><td>입문</td><td>만약 질문 한 개 만들기</td></tr><tr><td>초급</td><td>네 장면 카드 배열</td></tr><tr><td>중급</td><td>선택 장면 1편 집필</td></tr><tr><td>심화</td><td>낭독과 피드백 후 수정</td></tr></tbody></table></div>
+</section>
+
+<!-- ===== 33. 발문 ===== -->
+<section class="slide" aria-label="33. 발문">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>이야기를 여는 질문</h2><div class="prompt-card"><div class="label">발문 · 활동 문장</div><blockquote id="pt-33">주인공이 지금 가장 원하는 것은? 다른 선택을 했다면 어떤 일이 생길까? 마지막에 달라진 행동은?</blockquote><button type="button" class="copy-btn" data-copy-target="pt-33" aria-label="발문 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 34. 지도 유의점 ===== -->
+<section class="slide" aria-label="34. 지도 유의점">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>피드백의 방향</h2><div class="card-grid c2"><div class="card bad"><div class="t">평가 중심</div><div class="d">“교훈이 부족해요.”</div></div><div class="card good"><div class="t">탐색 중심</div><div class="d">“주인공이 왜 그 선택을 했을까요?”</div></div></div></div>
+</section>
+
+<!-- ===== 35. 현장 적용 ===== -->
+<section class="slide" aria-label="35. 현장 적용">
+  <div class="slide-content"><div class="kicker">2부 · 장면 집필</div><h2>강의 활동 설계</h2><div class="prompt-card"><div class="label">현장 적용 · 활동 문장</div><blockquote id="pt-35">내 강의 대상에 맞는 동화쓰기 활동 1개 설계. 목표·진행 시간·질문·결과물 적기.</blockquote><button type="button" class="copy-btn" data-copy-target="pt-35" aria-label="현장 적용 문장 복사">복사</button></div></div>
+</section>
+
+<!-- ===== 36. 마침 ===== -->
+<section class="slide title-slide" aria-label="36. 마침">
+  <div class="slide-content"><div class="kicker">강사를 위한 동화쓰기 · 100분</div><h1>오늘의 원고</h1><p class="lede">핵심 장면 초안 1편 · 다음 집필 목표 1개</p><div class="meta-row"><span>소재</span><span>장면</span><span>수정</span></div></div>
+</section>
+
+</main>
+
+<div id="progress" aria-hidden="true"></div>
+<nav id="nav" aria-label="슬라이드 이동">
+  <a href="260930 동화쓰기랜딩.html" target="_blank" rel="noopener" class="hide-sm" aria-label="강의 홈 새 창으로 열기">⌂ 홈</a>
+  <button type="button" id="navPrev" aria-label="이전 슬라이드">◀</button>
+  <span id="counter" aria-live="polite">1 / 36</span>
+  <button type="button" id="navNext" aria-label="다음 슬라이드">▶</button>
+  <span class="grow"></span>
+  <span class="hint hide-sm">← → 이동 · G 전체보기 · P PDF</span>
+  <button type="button" id="gridBtn" aria-haspopup="dialog" aria-controls="gridOverlay">▦ 전체 보기</button>
+  <button type="button" id="printBtn" class="hide-sm">⎙ PDF 저장</button>
+</nav>
+
+<div class="grid-overlay" id="gridOverlay" role="dialog" aria-modal="true" aria-label="전체 슬라이드 보기">
+  <div class="grid-head"><h2>전체 보기</h2><button type="button" id="gridClose">닫기 (Esc)</button></div>
+  <div class="grid-list" id="gridList"></div>
+</div>
+
+<script>
+(function(){
+  /* ▼ 내 강의 고유 접두사로 변경 (예: 'ai0927_') */
+  var LS = 'mykit_';
+
+  var stage = document.getElementById('stage');
+  var slides = Array.prototype.slice.call(stage.querySelectorAll(':scope > section.slide'));
+  var total = slides.length;
+  var STORAGE_KEY = LS + 'slide';
+  var idx = 0;
+
+  function lsGet(k){ try { return localStorage.getItem(k); } catch (e) { return null; } }
+  function lsSet(k, v){ try { localStorage.setItem(k, v); } catch (e) { /* 저장 불가 환경 · 무시 */ } }
+
+  /* 시작 위치: ?slide=N 우선, 없으면 마지막으로 본 장 */
+  var params = new URLSearchParams(location.search);
+  var qSlide = parseInt(params.get('slide'), 10);
+  if (!isNaN(qSlide) && qSlide >= 1 && qSlide <= total) {
+    idx = qSlide - 1;
+  } else {
+    var saved = parseInt(lsGet(STORAGE_KEY), 10);
+    if (!isNaN(saved) && saved >= 0 && saved < total) idx = saved;
+  }
+
+  var progressEl = document.getElementById('progress');
+  var counterEl = document.getElementById('counter');
+  var navPrev = document.getElementById('navPrev');
+  var navNext = document.getElementById('navNext');
+  var gridOverlay = document.getElementById('gridOverlay');
+  var gridList = document.getElementById('gridList');
+  var minis = [];
+  var lastFocus = null;
+
+  function show(i){
+    idx = Math.max(0, Math.min(total - 1, i));
+    slides.forEach(function(s, n){
+      s.classList.toggle('active', n === idx);
+      s.setAttribute('aria-hidden', n === idx ? 'false' : 'true');
+    });
+    progressEl.style.width = ((idx + 1) / total * 100) + '%';
+    counterEl.textContent = (idx + 1) + ' / ' + total;
+    navPrev.disabled = idx === 0;
+    navNext.disabled = idx === total - 1;
+    minis.forEach(function(m, n){ m.classList.toggle('current', n === idx); });
+    lsSet(STORAGE_KEY, String(idx));
+  }
+
+  function scaleMinis(){
+    minis.forEach(function(m){ m.firstChild.style.transform = 'scale(' + (m.clientWidth / 960) + ')'; });
+  }
+  window.addEventListener('resize', function(){ if (gridOverlay.classList.contains('open')) scaleMinis(); });
+  function openGrid(){
+    lastFocus = document.activeElement;
+    gridOverlay.classList.add('open');
+    scaleMinis();
+    var c = minis[idx];
+    if (c) { c.scrollIntoView({block:'center'}); c.focus(); }
+  }
+  function closeGrid(){
+    gridOverlay.classList.remove('open');
+    if (lastFocus && lastFocus.focus) lastFocus.focus();
+  }
+
+  document.addEventListener('keydown', function(e){
+    var t = e.target;
+    if (t && t.closest && t.closest('input, textarea, select')) return;
+    if (gridOverlay.classList.contains('open')) {
+      if (e.key === 'Escape' || e.key === 'g' || e.key === 'G') { closeGrid(); }
+      return;
+    }
+    /* 버튼에 포커스가 있을 때 스페이스·엔터는 버튼 동작에 양보 */
+    var onButton = t && t.closest && t.closest('button, a');
+    if ((e.key === ' ' || e.key === 'Enter') && onButton) return;
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') { e.preventDefault(); show(idx + 1); }
+    else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { e.preventDefault(); show(idx - 1); }
+    else if (e.key === 'g' || e.key === 'G' || e.key === 'ㅎ') { openGrid(); }
+    else if (e.key === 'p' || e.key === 'P' || e.key === 'ㅔ') { e.preventDefault(); window.print(); }
+    else if (e.key === 'Home') { show(0); }
+    else if (e.key === 'End') { show(total - 1); }
+  });
+
+  /* 무대 클릭: 오른쪽 절반 다음 · 왼쪽 절반 이전 (버튼·링크·프롬프트 카드 제외) */
+  stage.addEventListener('click', function(e){
+    if (e.target.closest('button, a, .prompt-card')) return;
+    var rect = stage.getBoundingClientRect();
+    if (e.clientX - rect.left > rect.width / 2) show(idx + 1); else show(idx - 1);
+  });
+  navPrev.addEventListener('click', function(){ show(idx - 1); });
+  navNext.addEventListener('click', function(){ show(idx + 1); });
+  document.getElementById('gridBtn').addEventListener('click', openGrid);
+  document.getElementById('gridClose').addEventListener('click', closeGrid);
+  document.getElementById('printBtn').addEventListener('click', function(){ window.print(); });
+
+  /* 타이머: 벽시계 기준 (탭이 뒤로 가도 시간이 밀리지 않음) */
+  function initTimer(el){
+    var totalSec = parseInt(el.dataset.minutes, 10) * 60;
+    var remaining = totalSec;
+    var endAt = null;
+    var running = false;
+    var tickId = null;
+    var timeEl = el.querySelector('.time');
+    var stateEl = el.querySelector('.state');
+
+    function currentRemaining(){
+      if (!running) return remaining;
+      return Math.round((endAt - Date.now()) / 1000);
+    }
+    function format(sec){
+      var neg = sec < 0, abs = Math.abs(sec);
+      var m = Math.floor(abs / 60), s = abs % 60;
+      return (neg ? '+' : '') + m + ':' + (s < 10 ? '0' + s : s);
+    }
+    function render(){
+      var sec = currentRemaining();
+      timeEl.textContent = format(sec);
+      el.classList.toggle('warn', sec <= 60);
+      if (stateEl) stateEl.textContent = running ? '진행' : '정지';
+    }
+    function start(){
+      if (running) return;
+      running = true;
+      endAt = Date.now() + remaining * 1000;
+      el.classList.add('running');
+      tickId = setInterval(render, 250);
+      render();
+    }
+    function pause(){
+      if (running) remaining = currentRemaining();
+      running = false;
+      el.classList.remove('running');
+      clearInterval(tickId);
+      render();
+    }
+    function reset(){
+      running = false;
+      clearInterval(tickId);
+      remaining = totalSec;
+      el.classList.remove('running');
+      render();
+    }
+    el.addEventListener('click', function(){ if (running) pause(); else start(); });
+    el.addEventListener('dblclick', function(e){ e.stopPropagation(); reset(); });
+    el.addEventListener('keydown', function(e){ if (e.key === 'r' || e.key === 'R' || e.key === 'ㄱ') { e.preventDefault(); reset(); } });
+    render();
+  }
+  stage.querySelectorAll('.timer-chip, .break-big[data-minutes]').forEach(initTimer);
+
+  /* 복사 버튼: clipboard API가 700ms 안에 끝나지 않으면 textarea 폴백 · 완료 표시는 한 번만 */
+  stage.querySelectorAll('.copy-btn').forEach(function(btn){
+    btn.addEventListener('click', function(e){
+      e.stopPropagation();
+      var target = document.getElementById(btn.dataset.copyTarget);
+      var text = target ? target.textContent : '';
+      var settled = false;
+      function done(){
+        if (settled) return;
+        settled = true;
+        btn.textContent = '복사됨 ✓';
+        btn.classList.add('copied');
+        setTimeout(function(){ btn.textContent = '복사'; btn.classList.remove('copied'); }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        setTimeout(function(){ if (!settled) fallbackCopy(text, done); }, 700);
+        navigator.clipboard.writeText(text).then(done).catch(function(){ fallbackCopy(text, done); });
+      } else {
+        fallbackCopy(text, done);
+      }
+    });
+  });
+  function fallbackCopy(text, done){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) { /* 구형 브라우저 · 무시 */ }
+    document.body.removeChild(ta);
+    done();
+  }
+
+  /* 전체보기 축소판: 타이머·복사 핸들러를 붙인 뒤 마지막에 생성 · 복제본은 inert로 포커스 제외 */
+  slides.forEach(function(s, n){
+    var mini = document.createElement('div');
+    mini.className = 'mini';
+    mini.tabIndex = 0;
+    mini.setAttribute('role', 'button');
+    mini.setAttribute('aria-label', (s.getAttribute('aria-label') || String(n + 1)) + ' 슬라이드로 이동');
+    var copy = document.createElement('div');
+    copy.className = s.className.replace(/\bactive\b/, '').trim();
+    copy.setAttribute('aria-hidden', 'true');
+    copy.setAttribute('inert', '');
+    copy.innerHTML = s.innerHTML;
+    copy.querySelectorAll('[id]').forEach(function(el){ el.removeAttribute('id'); });
+    var num = document.createElement('span');
+    num.className = 'mini-num';
+    num.setAttribute('aria-hidden', 'true');
+    num.textContent = n + 1;
+    var inner = document.createElement('div');
+    inner.className = 'mini-inner';
+    inner.appendChild(copy);
+    mini.appendChild(inner);
+    mini.appendChild(num);
+    mini.addEventListener('click', function(){ show(n); closeGrid(); });
+    mini.addEventListener('keydown', function(e){ if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(n); closeGrid(); } });
+    gridList.appendChild(mini);
+    minis.push(mini);
+  });
+  show(idx);
+})();
+</script>
+</body>
+</html>

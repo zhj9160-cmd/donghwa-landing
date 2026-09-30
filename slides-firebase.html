@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Firebase 동기화 데모 - 웹슬라이드 스타터 킷</title>
+<meta name="description" content="서버 없이 Firebase Realtime Database로 강사와 청중 화면을 동기화하는 웹슬라이드 데모">
+<meta name="theme-color" content="#111111">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔥</text></svg>">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
+<style>
+:root{
+  --ink:#111111; --sub:#555555; --mute:#8A8A8A;
+  --line:#E3E3E3;
+  --slide-bg:#F4F4F3; --card:#FFFFFF;
+  --shadow:0 .45cqi 1.4cqi rgba(0,0,0,.09), 0 .1cqi .3cqi rgba(0,0,0,.07);
+  --shadow-lg:0 .8cqi 2.4cqi rgba(0,0,0,.13), 0 .18cqi .45cqi rgba(0,0,0,.08);
+  --alert:#D32F2F;
+  --nav-h:60px;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:#0E0E0E;color:var(--ink);
+  font-family:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,'Malgun Gothic',sans-serif;
+  word-break:keep-all;overflow-wrap:anywhere;-webkit-text-size-adjust:100%}
+h1,h2,h3{font-family:inherit;text-wrap:balance;letter-spacing:-.01em}
+p,li{text-wrap:pretty}
+
+/* 16:9 무대 */
+#stage{position:fixed;left:50%;top:calc((100vh - var(--nav-h)) / 2);transform:translate(-50%,-50%);
+  width:min(100vw, calc((100vh - var(--nav-h)) * 16 / 9));aspect-ratio:16/9;
+  container-type:inline-size;background:var(--slide-bg);overflow:hidden}
+html.is-screen #stage{top:50%;width:min(100vw, 177.78vh)}
+html.is-screen #nav, html.is-screen #progress{display:none}
+
+.slide{position:absolute;inset:0;display:none;flex-direction:column;padding:4.6cqi 6cqi;background:var(--slide-bg);color:var(--ink)}
+.slide.active{display:flex}
+.slide-content{flex:1;display:flex;flex-direction:column;justify-content:center;gap:1.8cqi;min-height:0}
+
+/* 타이포 */
+.kicker{display:flex;align-items:center;gap:1cqi;font-size:1.6cqi;font-weight:800;letter-spacing:.06em;color:var(--ink)}
+.kicker::before{content:'';flex:0 0 auto;width:2.4cqi;height:.36cqi;background:currentColor}
+h1{font-size:6cqi;font-weight:900;line-height:1.22}
+h2{font-size:3.9cqi;font-weight:800;line-height:1.28}
+.lede{font-size:2.2cqi;color:var(--sub);line-height:1.6}
+
+/* 표지·마침: 머스타드 옐로 / 휴식: 검정 반전 */
+.title-slide{background:#F6C744;color:#111111}
+.title-slide .slide-content{align-items:center;text-align:center}
+.title-slide .kicker{color:#111111}
+.title-slide h1::after{content:'';display:block;width:6cqi;height:.4cqi;background:#111111;margin:2.4cqi auto 0}
+.title-slide .lede{color:#3A3000}
+.slide.dark{background:#111111;color:#FFFFFF}
+.slide.dark .kicker{color:#FFFFFF}
+.slide.dark .lede{color:#BDBDBD}
+.meta-row{display:flex;justify-content:center;gap:1.2cqi;flex-wrap:wrap;font-size:1.7cqi}
+.meta-row span{border:.18cqi solid #111111;border-radius:99cqi;padding:.7cqi 2cqi;color:#111111;font-weight:600}
+
+/* 불릿: 한 줄씩 그림자 박스 */
+.bullets{display:flex;flex-direction:column;gap:1.2cqi}
+.slide-content a{color:inherit;text-underline-offset:.3em;text-decoration-thickness:.15em}
+.slide-content a:hover{background:rgba(246,199,68,.5)}
+.bullets li{list-style:none;display:flex;gap:1.4cqi;align-items:flex-start;font-size:2.25cqi;line-height:1.55;
+  background:var(--card);box-shadow:var(--shadow);border-radius:1cqi;padding:1.25cqi 2cqi}
+.bullets li::before{content:'';flex:0 0 auto;width:.75cqi;height:.75cqi;background:var(--ink);margin-top:1.36cqi}
+
+/* 카드 */
+.card-grid{display:grid;gap:1.8cqi}
+.c2{grid-template-columns:repeat(2,1fr)}
+.c3{grid-template-columns:repeat(3,1fr)}
+.c5{grid-template-columns:repeat(5,1fr)}
+.c6{grid-template-columns:repeat(3,1fr)}
+.c4{grid-template-columns:repeat(4,1fr)}
+.tip{display:flex;align-items:center;gap:1.2cqi;font-size:2cqi;font-weight:700;color:var(--ink)}
+.tip b{flex:0 0 auto;background:#111111;color:#FFFFFF;border-radius:99cqi;padding:.35cqi 1.5cqi;font-size:1.5cqi;font-weight:800}
+.card{background:var(--card);border-radius:1.2cqi;box-shadow:var(--shadow-lg);padding:2.2cqi;
+  display:flex;flex-direction:column;gap:.8cqi;min-width:0}
+.card .n{font-size:3.4cqi;font-weight:900;line-height:1;color:var(--ink)}
+.card .t{font-size:2.3cqi;font-weight:800}
+.card .d{font-size:1.8cqi;color:var(--sub);line-height:1.5}
+.card.bad{background:#FAFAFA;box-shadow:none;border:.2cqi dashed #9E9E9E}
+.card.bad .t{color:var(--sub)}
+.card.bad .t::before{content:'✕  '}
+.card.good{border-left:.7cqi solid var(--ink)}
+.card.good .t::before{content:'✓  '}
+
+/* 예시 박스 */
+.ex-label{font-size:1.5cqi;font-weight:800;letter-spacing:.08em;color:var(--mute)}
+.quote-box{background:var(--card);box-shadow:var(--shadow-lg);border-radius:1.2cqi;border-left:.8cqi solid var(--ink);
+  padding:2.6cqi 3cqi;font-size:2.6cqi;line-height:1.6;font-weight:600}
+
+/* 표 */
+table.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:1.85cqi;line-height:1.35;
+  background:var(--card);box-shadow:var(--shadow-lg);border-radius:1.2cqi;overflow:hidden}
+table.tbl th, table.tbl td{padding:.8cqi 1.6cqi;text-align:left;border-bottom:.12cqi solid var(--line)}
+table.tbl tr:last-child td{border-bottom:none}
+table.tbl th{background:#111111;color:#FFFFFF;font-weight:800}
+table.tbl tr.today td{font-weight:800}
+table.tbl tr.today td:first-child{box-shadow:inset .55cqi 0 0 #111111}
+table.tbl td:first-child, table.tbl th:first-child{white-space:nowrap}
+table.tbl td:first-child{color:var(--sub)}
+
+/* 프롬프트 카드: 검정 박스 */
+.prompt-card{position:relative;background:#111111;color:#F2F2F2;border-radius:1.2cqi;box-shadow:var(--shadow-lg);
+  padding:2cqi 2.4cqi;display:flex;flex-direction:column;gap:1cqi}
+.prompt-card .label{font-size:1.5cqi;font-weight:800;letter-spacing:.06em;color:#BDBDBD;padding-right:14cqi}
+.prompt-card blockquote{font-size:2cqi;line-height:1.6;color:#FFFFFF;border-left:.3cqi solid #666666;padding-left:1.6cqi;font-style:normal}
+.copy-btn{position:absolute;top:1.5cqi;right:1.6cqi;font-family:inherit;font-size:1.5cqi;font-weight:800;
+  padding:.7cqi 1.8cqi;border-radius:99cqi;border:none;background:#FFFFFF;color:#111111;cursor:pointer;min-height:36px}
+.copy-btn:hover, .copy-btn.copied{background:#E2E2E2}
+.copy-btn:focus-visible{outline:.25cqi solid #FFFFFF;outline-offset:.25cqi}
+
+/* 코드 박스 */
+.quote-box.code{font-family:Consolas,'D2Coding',monospace;font-size:1.7cqi;font-weight:500;background:#111111;color:#F2F2F2;border-left-color:#666666;padding:1.6cqi 2.2cqi;line-height:1.5}
+
+/* 타이머 */
+.timer-chip{display:inline-flex;align-items:center;gap:1cqi;align-self:flex-start;cursor:pointer;user-select:none;
+  background:var(--card);box-shadow:var(--shadow);border:.18cqi solid var(--ink);border-radius:99cqi;
+  padding:.9cqi 2.2cqi;font-size:2cqi;font-weight:800;color:var(--ink)}
+.timer-chip .time{font-variant-numeric:tabular-nums;min-width:3.4em;text-align:center}
+.timer-chip.running{background:#111111;color:#FFFFFF}
+.timer-chip.warn .time{color:var(--alert)}
+.timer-chip.running.warn .time{color:#FF8A80}
+.break-big{cursor:pointer;user-select:none;text-align:center;font-variant-numeric:tabular-nums;
+  font-size:16cqi;font-weight:900;line-height:1.05;color:#FFFFFF}
+.break-big.warn{color:#FF8A80}
+
+/* 하단 네비 */
+#nav{position:fixed;left:0;right:0;bottom:0;height:var(--nav-h);background:#0E0E0E;border-top:1px solid #222;
+  display:flex;align-items:center;gap:8px;padding:0 14px;color:#EEEEEE;font-size:14px;z-index:200}
+#nav button, #nav a{background:#1F1F1F;color:#EEEEEE;border:1px solid #2E2E2E;border-radius:8px;
+  height:44px;min-width:44px;padding:0 14px;font-size:14px;font-weight:700;font-family:inherit;cursor:pointer;
+  text-decoration:none;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+#nav button:hover, #nav a:hover{background:#2C2C2C}
+#nav button:disabled{opacity:.35;cursor:default}
+#nav button:focus-visible, #nav a:focus-visible{outline:2px solid #FFFFFF;outline-offset:2px}
+#nav .grow{flex:1}
+#counter{font-variant-numeric:tabular-nums;font-weight:800;min-width:5.5em;text-align:center}
+#modeBadge{border:1px solid #444;border-radius:99px;padding:4px 12px;font-size:12.5px;font-weight:700;color:#DDDDDD;display:none}
+#modeBadge.show{display:inline-block}
+#modeBadge.follow{background:#FFFFFF;color:#111111;border-color:#FFFFFF}
+.hint{color:#8A8A8A;font-size:12.5px}
+#progress{position:fixed;left:0;bottom:var(--nav-h);height:3px;background:#FFFFFF;width:0;z-index:201;transition:width .2s}
+@media (max-width:760px){ #nav .hide-sm{display:none} }
+
+/* 전체보기: 실제 축소판 */
+.grid-overlay{position:fixed;inset:0;z-index:500;background:rgba(10,10,10,.97);display:none;overflow:auto;padding:22px 22px 40px}
+.grid-overlay.open{display:block}
+.grid-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+.grid-head h2{color:#FFFFFF;font-size:20px;font-weight:800}
+.grid-head button{background:#1F1F1F;color:#EEEEEE;border:1px solid #2E2E2E;border-radius:8px;height:44px;padding:0 16px;
+  font-size:14px;font-weight:700;font-family:inherit;cursor:pointer}
+.grid-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px}
+.mini{position:relative;aspect-ratio:16/9;border-radius:8px;overflow:hidden;cursor:pointer;
+  outline:3px solid transparent;outline-offset:2px;background:var(--slide-bg)}
+.mini:hover, .mini:focus-visible, .mini.current{outline-color:#FFFFFF}
+/* 960px 기준으로 그린 뒤 축소 - 브라우저 최소 글꼴 크기에 걸리지 않게 */
+.mini-inner{position:absolute;left:0;top:0;width:960px;height:540px;container-type:inline-size;
+  transform-origin:0 0;pointer-events:none;background:var(--slide-bg)}
+.mini-inner .slide{display:flex}
+.mini-num{position:absolute;right:6px;top:6px;background:rgba(0,0,0,.78);color:#FFFFFF;font-size:12px;font-weight:700;
+  padding:2px 8px;border-radius:99px;z-index:2}
+
+@media (prefers-reduced-motion:reduce){ #progress{transition:none} }
+
+@page{size:13.333in 7.5in;margin:0}
+@media print{
+  html, body{overflow:visible!important;height:auto!important;background:#FFFFFF}
+  #nav, #progress, .grid-overlay{display:none!important}
+  #stage{position:static!important;transform:none!important;width:13.333in!important;aspect-ratio:auto!important;overflow:visible!important}
+  #stage > .slide{position:relative!important;display:flex!important;width:13.333in;height:7.5in;
+    break-after:page;page-break-after:always;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  #stage > .slide:last-child{break-after:auto;page-break-after:auto}
+  html.no-pdf #stage{display:none!important}
+  html.no-pdf body::before{content:"PDF 저장이 비활성화되어 있습니다. 강사에게 문의하세요.";
+    display:block;padding:2rem;font-size:14pt;color:#000}
+}
+</style>
+<style>
+.fb-banner{position:fixed;left:0;right:0;top:0;z-index:300;background:#F6C744;color:#111;font:700 14px/1.4 'Pretendard Variable',Pretendard,sans-serif;text-align:center;padding:8px 12px}
+.conn{border:1px solid #444;border-radius:99px;padding:4px 12px;font-size:12.5px;font-weight:700;color:#DDD}
+#nav button[aria-pressed="true"]{background:#FFFFFF;color:#111111}
+#nav [hidden]{display:none!important}
+.login{position:fixed;inset:0;z-index:600;background:rgba(10,10,10,.8);display:flex;align-items:center;justify-content:center;padding:16px}
+.login[hidden]{display:none}
+.login-box{background:#FFF;color:#111;border-radius:14px;padding:24px;width:min(360px,100%);display:flex;flex-direction:column;gap:12px;font-family:'Pretendard Variable',Pretendard,sans-serif}
+.login-box h2{font-size:20px}
+.login-box label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:700}
+.login-box input{font:inherit;font-weight:500;border:1px solid #BBB;border-radius:8px;padding:10px 12px;min-height:44px}
+.login-box .row{display:flex;gap:8px}
+.login-box button{font:inherit;font-weight:800;min-height:44px;padding:0 16px;border-radius:8px;border:1px solid #BBB;background:#FFF;cursor:pointer}
+.login-box button.primary{background:#111;color:#FFF;border-color:#111}
+.login-box .err{color:#B71C1C;font-size:13px;font-weight:700;min-height:1.2em}
+</style>
+</head>
+<body>
+
+<div id="fbBanner" class="fb-banner" hidden>Firebase 설정 전 · 자유 열람 모드 · firebase-config.js 입력 후 동기화</div>
+
+<div id="stage">
+
+<section class="slide active title-slide" aria-label="1. 표지">
+  <div class="slide-content">
+    <div class="kicker">스타터 킷 · 심화</div>
+    <h1>Firebase 실시간 동기화<br>서버 없는 웹슬라이드</h1>
+    <p class="lede">정적 호스팅(Vercel · GitHub Pages) + Firebase Realtime Database</p>
+    <div class="meta-row"><span>PHP 불필요</span><span>무료 요금제 동시 접속 100명</span></div>
+  </div>
+</section>
+
+<section class="slide" aria-label="2. 동작 구조">
+  <div class="slide-content">
+    <div class="kicker">동작 구조</div>
+    <h2>강사 한 번 넘김 → 모든 화면 즉시 이동</h2>
+    <div class="card-grid c4">
+      <div class="card"><div class="n">①</div><div class="t">강사 로그인</div><div class="d">?admin 주소 · 이메일 로그인</div></div>
+      <div class="card"><div class="n">②</div><div class="t">상태 저장</div><div class="d">decks/덱 이름/state 에 현재 장</div></div>
+      <div class="card"><div class="n">③</div><div class="t">변경 알림</div><div class="d">Firebase가 청중에게 즉시 전달</div></div>
+      <div class="card"><div class="n">④</div><div class="t">화면 이동</div><div class="d">잠금 중이면 같은 장으로</div></div>
+    </div>
+    <p class="lede">폴링(2초마다 질문) 대신 변경 알림 · 요청 수 대폭 감소</p>
+  </div>
+</section>
+
+<section class="slide" aria-label="3. 설정 5단계">
+  <div class="slide-content">
+    <div class="kicker">Firebase 콘솔 · 약 10분</div>
+    <h2>설정 5단계</h2>
+    <table class="tbl">
+      <tr><th>단계</th><th>콘솔 메뉴</th><th>할 일</th></tr>
+      <tr><td>1</td><td>프로젝트 추가</td><td>이름 입력 · 애널리틱스 끄기</td></tr>
+      <tr><td>2</td><td>빌드 → Realtime Database</td><td>데이터베이스 만들기 · 위치 싱가포르 · 잠금 모드</td></tr>
+      <tr><td>3</td><td>빌드 → Authentication</td><td>이메일/비밀번호 사용 · 강사 계정 추가 · UID 복사</td></tr>
+      <tr><td>4</td><td>Realtime Database → 규칙</td><td>database.rules.json 붙여넣기 · 게시 · 데이터에 admins/UID = true</td></tr>
+      <tr><td>5</td><td>프로젝트 설정 → 내 앱(웹)</td><td>웹 앱 등록 · 구성 값 firebase-config.js 에 붙여넣기</td></tr>
+    </table>
+  </div>
+</section>
+
+<section class="slide" aria-label="4. 구성 파일">
+  <div class="slide-content">
+    <div class="kicker">firebase-config.js</div>
+    <h2>구성 파일 · 값 붙여넣기만</h2>
+    <div class="quote-box code">window.FIREBASE_CONFIG = { apiKey:'…', authDomain:'…', databaseURL:'https://…firebasedatabase.app', projectId:'…', appId:'…' };
+window.DECK_ID = 'my-lecture-0927';</div>
+    <ul class="bullets">
+      <li>apiKey: 비밀번호 아님 · 웹 앱에 공개되는 식별 정보</li>
+      <li>보안: 규칙 파일이 담당 · 쓰기는 admins 목록 계정만</li>
+      <li>DECK_ID: 강의마다 다른 이름 · 한 프로젝트로 여러 강의</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide" aria-label="5. 보안 규칙 핵심">
+  <div class="slide-content">
+    <div class="kicker">database.rules.json</div>
+    <h2>보안 규칙 핵심 · 로그인만으론 부족</h2>
+    <div class="card-grid c2">
+      <div class="card bad"><div class="t">로그인한 사람 모두 쓰기 허용</div><div class="d">이메일 가입은 누구나 가능 · 수강생이 가입해서 슬라이드 조작</div></div>
+      <div class="card good"><div class="t">admins 목록 UID만 쓰기</div><div class="d">콘솔에서 직접 넣은 강사 UID만 · 값 형식 검사까지</div></div>
+    </div>
+    <div class="quote-box code">".write": "auth != null &amp;&amp; root.child('admins').child(auth.uid).val() === true"</div>
+  </div>
+</section>
+
+<section class="slide" aria-label="6. 주소별 역할">
+  <div class="slide-content">
+    <div class="kicker">사용법</div>
+    <h2>주소별 역할 · 파일 하나</h2>
+    <table class="tbl">
+      <tr><th>주소</th><th>역할</th><th>동작</th></tr>
+      <tr><td>slides-firebase.html?admin</td><td>강사</td><td>로그인 · 넘기면 전원 이동 · 잠금 · PDF 통제</td></tr>
+      <tr><td>slides-firebase.html?screen</td><td>화면공유</td><td>메뉴 없이 꽉 찬 화면 · 강사 따라가기</td></tr>
+      <tr class="today"><td>slides-firebase.html</td><td>청중</td><td>잠금 중 따라가기 · 해제 시 자유 이동</td></tr>
+      <tr><td>slides-firebase.html?view</td><td>복습</td><td>동기화 없이 각자 넘김</td></tr>
+    </table>
+    <p class="lede">강사 화면 하단: 연결 상태 · 접속자 수 표시</p>
+  </div>
+</section>
+
+<section class="slide" aria-label="7. 무료 한도 · 주의">
+  <div class="slide-content">
+    <div class="kicker">무료 요금제(Spark) · 2026-09 기준</div>
+    <h2>무료 한도 · 운영 주의</h2>
+    <div class="card-grid c3">
+      <div class="card"><div class="n">100</div><div class="t">동시 접속</div><div class="d">탭 하나 = 접속 하나 · 초과 시 새 접속 거부</div></div>
+      <div class="card"><div class="n">1GB</div><div class="t">저장 용량</div><div class="d">상태 몇 줄 · 사실상 무제한</div></div>
+      <div class="card"><div class="n">10GB</div><div class="t">월 전송량</div><div class="d">장 넘김 한 번 = 수십 바이트</div></div>
+    </div>
+    <ul class="bullets">
+      <li>수강생 100명 이상 · 유료 요금제(Blaze) 또는 PHP 서버</li>
+      <li>후기·질문 저장까지 넣으려면 규칙에 경로 추가 · 공개 응답 무기명 원칙 동일</li>
+    </ul>
+  </div>
+</section>
+
+<section class="slide title-slide" aria-label="8. 테스트">
+  <div class="slide-content">
+    <div class="kicker">마지막 확인</div>
+    <h1>두 기기로 테스트</h1>
+    <p class="lede">노트북 ?admin 로그인 · 휴대폰 기본 주소 → 넘길 때 휴대폰도 이동하면 완료</p>
+    <div class="meta-row"><span>잠금 해제 → 휴대폰 자유 이동</span><span>PDF 막기 → 버튼 사라짐</span></div>
+  </div>
+</section>
+
+</div>
+
+<div id="progress"></div>
+<nav id="nav" aria-label="슬라이드 이동">
+  <button type="button" id="navPrev" aria-label="이전 슬라이드">◀</button>
+  <span id="counter" aria-live="polite">1 / 8</span>
+  <button type="button" id="navNext" aria-label="다음 슬라이드">▶</button>
+  <span id="modeBadge"></span>
+  <span id="connBadge" class="conn" hidden></span>
+  <span class="grow"></span>
+  <span class="hint hide-sm">← → 이동 · G 전체보기 · P PDF</span>
+  <button type="button" id="lockBtn" hidden>🔒 잠금</button>
+  <button type="button" id="pdfBtn" hidden>PDF 허용</button>
+  <button type="button" id="gridBtn">▦ 전체 보기</button>
+  <button type="button" id="printBtn" class="hide-sm">⎙ PDF 저장</button>
+</nav>
+
+<div class="grid-overlay" id="gridOverlay" role="dialog" aria-label="전체 슬라이드 보기">
+  <div class="grid-head"><h2>전체 보기</h2><button type="button" id="gridClose">닫기 (Esc)</button></div>
+  <div class="grid-list" id="gridList"></div>
+</div>
+
+<div class="login" id="login" hidden role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+  <form class="login-box" id="loginForm">
+    <h2 id="loginTitle">강사 로그인</h2>
+    <label>이메일<input id="lgEmail" type="email" autocomplete="username" required></label>
+    <label>비밀번호<input id="lgPw" type="password" autocomplete="current-password" required></label>
+    <p class="err" id="lgErr" role="alert"></p>
+    <div class="row"><button type="submit" class="primary">로그인</button><button type="button" id="lgClose">닫기</button></div>
+  </form>
+</div>
+
+<script src="firebase-config.js"></script>
+<script type="module">
+import { isConfigured, createSync } from './firebase-sync.js';
+
+const stage = document.getElementById('stage');
+const slides = [...stage.querySelectorAll(':scope > section.slide')];
+const total = slides.length;
+const params = new URLSearchParams(location.search);
+const WANT_ADMIN = params.has('admin'), IS_SCREEN = params.has('screen'), IS_VIEW = params.has('view');
+const LS = 'fbdemo_';                       /* 강의마다 고유 접두사 */
+if (IS_SCREEN) document.documentElement.classList.add('is-screen');
+
+const $ = (id) => document.getElementById(id);
+let idx = 0, LOCKED = true, PDF_OK = true, IS_ADMIN = false, sync = null;
+const minis = [];
+
+try { const s = parseInt(localStorage.getItem(LS + 'slide'), 10); if (s >= 0 && s < total) idx = s; } catch (e) {}
+
+function canNav() { return IS_ADMIN || IS_VIEW || !sync || !LOCKED; }
+function updateNav() {
+  const ok = canNav();
+  $('navPrev').disabled = !ok || idx === 0;
+  $('navNext').disabled = !ok || idx === total - 1;
+  let text = '', follow = false;
+  if (IS_ADMIN) text = '관리자';
+  else if (IS_VIEW || !sync) text = '자유 열람';
+  else if (LOCKED) { text = '발표자를 따라가는 중'; follow = true; }
+  else text = '자유 이동';
+  $('modeBadge').textContent = text;
+  $('modeBadge').classList.toggle('show', !!text);
+  $('modeBadge').classList.toggle('follow', follow);
+  $('lockBtn').hidden = $('pdfBtn').hidden = !IS_ADMIN;
+  $('lockBtn').textContent = LOCKED ? '🔒 잠금 중' : '🔓 자유 이동';
+  $('lockBtn').setAttribute('aria-pressed', String(LOCKED));
+  $('pdfBtn').textContent = PDF_OK ? 'PDF 허용 중' : 'PDF 막힘';
+  $('pdfBtn').setAttribute('aria-pressed', String(PDF_OK));
+}
+function show(i) {
+  idx = Math.max(0, Math.min(total - 1, i));
+  slides.forEach((s, n) => s.classList.toggle('active', n === idx));
+  $('progress').style.width = ((idx + 1) / total * 100) + '%';
+  $('counter').textContent = (idx + 1) + ' / ' + total;
+  minis.forEach((m, n) => m.classList.toggle('current', n === idx));
+  updateNav();
+  try { localStorage.setItem(LS + 'slide', String(idx)); } catch (e) {}
+}
+function navigate(i) {
+  if (!canNav()) return;
+  show(i);
+  if (IS_ADMIN) sync.setSlide(idx).catch(() => flash('저장 실패 · 관리자 권한 확인'));
+}
+function applyPdf(ok) {
+  PDF_OK = !!ok;
+  $('printBtn').style.display = PDF_OK ? '' : 'none';
+  document.documentElement.classList.toggle('no-pdf', !PDF_OK);
+  document.querySelector('#nav .hint').textContent = PDF_OK ? '← → 이동 · G 전체보기 · P PDF' : '← → 이동 · G 전체보기';
+}
+function flash(msg) { const b = $('connBadge'); b.hidden = false; b.textContent = msg; }
+
+/* ---------- Firebase 동기화 ---------- */
+if (!isConfigured(window.FIREBASE_CONFIG)) {
+  $('fbBanner').hidden = false;               /* 설정 전: 조용히 자유 열람 */
+} else if (!IS_VIEW) {
+  sync = createSync(window.FIREBASE_CONFIG, window.DECK_ID || 'my-lecture');
+  let lastState = null;
+  sync.onState((s) => {
+    if (!s) { flash('상태 읽기 실패 · 규칙 확인'); return; }
+    lastState = s; LOCKED = !!s.locked; applyPdf(s.pdf);
+    if (!IS_ADMIN && (IS_SCREEN || LOCKED)) show(s.slide | 0); else updateNav();
+  });
+  let viewers = null, online = false;
+  const renderConn = () => {
+    if (!(IS_ADMIN || IS_SCREEN)) { $('connBadge').hidden = online; $('connBadge').textContent = '연결 끊김 · 재연결 중'; return; }
+    $('connBadge').hidden = false;
+    $('connBadge').textContent = (online ? '● 연결' : '○ 끊김') + (viewers != null ? ' · 접속 ' + viewers + '명' : '');
+  };
+  sync.onConnection((on) => { online = on; renderConn(); });
+  if (!IS_SCREEN && !WANT_ADMIN) sync.joinViewers();
+  sync.onAdmin((admin, user) => {
+    IS_ADMIN = admin;
+    if (admin) { $('login').hidden = true; if (lastState) show(lastState.slide | 0); if (!sync._viewersOn) { sync._viewersOn = true; sync.onViewers((n) => { viewers = n; renderConn(); }); } }
+    else if (WANT_ADMIN && user) { $('lgErr').textContent = '강사 목록(admins)에 없는 계정'; $('login').hidden = false; }
+    renderConn(); updateNav();
+  });
+  if (WANT_ADMIN) setTimeout(() => { if (!IS_ADMIN) { $('login').hidden = false; $('lgEmail').focus(); } }, 900);
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault(); $('lgErr').textContent = '';
+    try { await sync.login($('lgEmail').value.trim(), $('lgPw').value); }
+    catch (err) { $('lgErr').textContent = '로그인 실패 · 이메일·비밀번호 확인'; }
+  });
+  $('lgClose').addEventListener('click', () => { $('login').hidden = true; });
+  $('lockBtn').addEventListener('click', () => sync.setLock(!LOCKED).catch(() => flash('저장 실패')));
+  $('pdfBtn').addEventListener('click', () => sync.setPdf(!PDF_OK).catch(() => flash('저장 실패')));
+}
+
+/* ---------- 조작 ---------- */
+document.addEventListener('keydown', (e) => {
+  if (e.target.closest && e.target.closest('input, textarea, select, .login')) return;
+  if ($('gridOverlay').classList.contains('open')) { if (['Escape', 'g', 'G'].includes(e.key)) closeGrid(); return; }
+  if (['ArrowRight', ' ', 'PageDown'].includes(e.key)) { e.preventDefault(); navigate(idx + 1); }
+  else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); navigate(idx - 1); }
+  else if (e.key === 'g' || e.key === 'G') openGrid();
+  else if (e.key === 'p' || e.key === 'P') { e.preventDefault(); if (PDF_OK) print(); }
+  else if (e.key === 'Home') navigate(0);
+  else if (e.key === 'End') navigate(total - 1);
+});
+stage.addEventListener('click', (e) => {
+  if (e.target.closest('a, button, .quote-box')) return;
+  const r = stage.getBoundingClientRect();
+  navigate(e.clientX - r.left > r.width / 2 ? idx + 1 : idx - 1);
+});
+$('navPrev').addEventListener('click', () => navigate(idx - 1));
+$('navNext').addEventListener('click', () => navigate(idx + 1));
+$('printBtn').addEventListener('click', () => { if (PDF_OK) print(); });
+$('gridBtn').addEventListener('click', openGrid);
+$('gridClose').addEventListener('click', closeGrid);
+
+/* 전체 보기: 960px 로 그린 뒤 축소 (브라우저 최소 글꼴 크기 회피) */
+function scaleMinis() { minis.forEach((m) => { m.firstChild.style.transform = 'scale(' + (m.clientWidth / 960) + ')'; }); }
+function openGrid() { $('gridOverlay').classList.add('open'); scaleMinis(); minis[idx] && minis[idx].scrollIntoView({ block: 'center' }); }
+function closeGrid() { $('gridOverlay').classList.remove('open'); }
+addEventListener('resize', () => { if ($('gridOverlay').classList.contains('open')) scaleMinis(); });
+slides.forEach((s, n) => {
+  const mini = document.createElement('div'); mini.className = 'mini'; mini.tabIndex = 0; mini.setAttribute('role', 'button');
+  mini.setAttribute('aria-label', (s.getAttribute('aria-label') || n + 1) + ' 슬라이드로 이동');
+  const copy = document.createElement('div'); copy.className = s.className.replace(/\bactive\b/, '').trim();
+  copy.setAttribute('aria-hidden', 'true'); copy.innerHTML = s.innerHTML;
+  const inner = document.createElement('div'); inner.className = 'mini-inner'; inner.appendChild(copy);
+  const num = document.createElement('span'); num.className = 'mini-num'; num.textContent = n + 1;
+  mini.append(inner, num);
+  const go = () => { navigate(n); closeGrid(); };
+  mini.addEventListener('click', go);
+  mini.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+  $('gridList').appendChild(mini); minis.push(mini);
+});
+show(idx);
+</script>
+</body>
+</html>
